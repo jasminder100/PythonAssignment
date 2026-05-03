@@ -3,9 +3,9 @@ S3 File Manager is a browser-based tool that lets you manage files and folders s
 
 # Stack
 
-Backend — Python 3, Flask, Boto3
-Storage — MinIO (S3-compatible)
-Frontend — HTML, CSS, JavaScript
+1) Backend — Python 3, Flask, Boto3
+2) Storage — MinIO (S3-compatible)
+3) Frontend — HTML, CSS, JavaScript
 
 # Setup
 1. Install dependencies
