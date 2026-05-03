@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>S3 File Manager</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0c10;
+      --bg2:      #111318;
+      --bg3:      #181b22;
+      --border:   #23272f;
+      --border2:  #2d3240;
+      --text:     #e8eaf0;
+      --muted:    #6b7280;
+      --accent:   #6ee7b7;
+      --accent2:  #34d399;
+      --danger:   #f87171;
+      --warning:  #fbbf24;
+      --blue:     #60a5fa;
+      --mono:     'DM Mono', monospace;
+      --sans:     'Syne', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 220px;
+      min-height: 100vh;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+    }
+
+    .sidebar-logo {
+      padding: 28px 20px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-logo span {
+      display: inline-block;
+      background: var(--accent);
+      color: #000;
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    .sidebar-logo h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .nav { padding: 16px 12px; flex: 1; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      transition: all 0.15s;
+      margin-bottom: 2px;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      letter-spacing: 0.02em;
+    }
+
+    .nav-item:hover { background: var(--bg3); color: var(--text); }
+    .nav-item.active { background: rgba(110,231,183,0.1); color: var(--accent); }
+
+    .nav-item .icon {
+      width: 16px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* ── Main ── */
+    .main {
+      margin-left: 220px;
+      flex: 1;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .topbar h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.03em;
+    }
+
+    .status-dot {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .content { padding: 32px; }
+
+    /* ── Panels ── */
+    .panel {
+      display: none;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .panel.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .panel-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .panel-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 28px;
+      font-family: var(--mono);
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: var(--border2); }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    /* ── Form Controls ── */
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    input[type="text"], input[type="file"] {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 9px 14px;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    input[type="text"] { min-width: 180px; }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(110,231,183,0.15);
+    }
+
+    input[type="text"].error {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 2px rgba(248,113,113,0.15);
+    }
+
+    input[type="file"] {
+      padding: 7px 10px;
+      cursor: pointer;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+      margin-top: -6px;
+      margin-bottom: 10px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 9px 18px;
+      border-radius: 8px;
+      border: none;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-ghost {
+      background: var(--bg3);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { border-color: var(--border2); background: var(--bg); }
+
+    .btn-danger {
+      background: rgba(248,113,113,0.12);
+      color: var(--danger);
+      border: 1px solid rgba(248,113,113,0.2);
+    }
+    .btn-danger:hover { background: rgba(248,113,113,0.2); }
+
+    .btn-blue {
+      background: rgba(96,165,250,0.12);
+      color: var(--blue);
+      border: 1px solid rgba(96,165,250,0.2);
+    }
+    .btn-blue:hover { background: rgba(96,165,250,0.2); }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+    /* ── Output ── */
+    .output {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--muted);
+      min-height: 52px;
+      margin-top: 12px;
+      overflow-x: auto;
+      transition: all 0.2s;
+    }
+
+    .output.success { border-color: rgba(110,231,183,0.3); color: var(--accent); }
+    .output.error-state { border-color: rgba(248,113,113,0.3); color: var(--danger); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 28px; right: 28px;
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 100;
+      max-width: 340px;
+    }
+
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { border-color: rgba(110,231,183,0.4); color: var(--accent); }
+    .toast.error { border-color: rgba(248,113,113,0.4); color: var(--danger); }
+
+    /* ── Bucket list ── */
+    .bucket-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .bucket-chip {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-family: var(--mono);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .bucket-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .bucket-chip .bucket-icon { font-size: 16px; }
+
+    /* ── File table ── */
+    .file-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+
+    .file-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .file-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .file-table tr:last-child td { border-bottom: none; }
+
+    .file-table tr:hover td { background: var(--bg3); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .badge-folder { background: rgba(251,191,36,0.12); color: var(--warning); }
+    .badge-file { background: rgba(96,165,250,0.12); color: var(--blue); }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    /* ── Validation msg ── */
+    .val-msg {
+      font-size: 11px;
+      color: var(--danger);
+      font-family: var(--mono);
+      margin-top: 4px;
+      display: none;
+    }
+
+    .val-msg.show { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <span>S3</span>
+    <h1>File Manager</h1>
+  </div>
+  <nav class="nav">
+    <button class="nav-item active" onclick="switchPanel('buckets', this)">
+      <span class="icon">🪣</span> Buckets
+    </button>
+    <button class="nav-item" onclick="switchPanel('browse', this)">
+      <span class="icon">📂</span> Browse
+    </button>
+    <button class="nav-item" onclick="switchPanel('folders', this)">
+      <span class="icon">📁</span> Folders
+    </button>
+    <button class="nav-item" onclick="switchPanel('upload', this)">
+      <span class="icon">⬆️</span> Upload
+    </button>
+    <button class="nav-item" onclick="switchPanel('delete', this)">
+      <span class="icon">🗑️</span> Delete File
+    </button>
+    <button class="nav-item" onclick="switchPanel('copymove', this)">
+      <span class="icon">✂️</span> Copy / Move
+    </button>
+  </nav>
+  <div class="sidebar-footer">MinIO · localhost</div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <h2 id="panel-label">Buckets</h2>
+    <div class="status-dot"><div class="dot"></div> Connected</div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── Buckets Panel ── -->
+    <div class="panel active" id="panel-buckets">
+      <p class="panel-title">Bucket Management</p>
+      <p class="panel-sub">create · delete · list all buckets</p>
+
+      <div class="card">
+        <div class="card-title">Create Bucket</div>
+        <div class="row">
+          <input type="text" id="new-bucket" placeholder="bucket-name (lowercase)" oninput="sanitizeBucketInput(this)" />
+          <button class="btn btn-primary" onclick="createBucket()">Create Bucket</button>
+        </div>
+        <div class="val-msg" id="new-bucket-err">Bucket names must be lowercase, no spaces.</div>
+        <div class="hint">⚠ MinIO requires lowercase letters, numbers, and hyphens only.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Delete Bucket</div>
+        <div class="row">
+          <input type="text" id="del-bucket" placeholder="bucket-name" oninput="sanitizeBucketInput(this)" />
+          <button class="btn btn-danger" onclick="deleteBucket()">Delete</button>
+        </div>
+        <div class="hint">Bucket must be empty before deletion.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">All Buckets</div>
+        <button class="btn btn-ghost" onclick="listBuckets()">↻ Refresh List</button>
+        <div id="buckets-output" class="output">Click refresh to load buckets.</div>
+      </div>
+    </div>
+
+    <!-- ── Browse Panel ── -->
+    <div class="panel" id="panel-browse">
+      <p class="panel-title">Browse Contents</p>
+      <p class="panel-sub">explore files and folders inside a bucket</p>
+
+      <div class="card">
+        <div class="card-title">Navigate</div>
+        <div class="row">
+          <input type="text" id="browse-bucket" placeholder="bucket-name" />
+          <input type="text" id="browse-prefix" placeholder="prefix / folder (optional)" />
+          <button class="btn btn-primary" onclick="listContents()">Browse</button>
+        </div>
+        <div id="browse-output" class="output">Enter a bucket name and click Browse.</div>
+      </div>
+    </div>
+
+    <!-- ── Folders Panel ── -->
+    <div class="panel" id="panel-folders">
+      <p class="panel-title">Folder Operations</p>
+      <p class="panel-sub">create or delete virtual folders (prefixes)</p>
+
+      <div class="card">
+        <div class="card-title">Create Folder</div>
+        <div class="row">
+          <input type="text" id="cf-bucket" placeholder="bucket-name" />
+          <input type="text" id="cf-folder" placeholder="folder-name" />
+          <button class="btn btn-primary" onclick="createFolder()">Create Folder</button>
+        </div>
+        <div id="cf-output" class="output">–</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Delete Folder</div>
+        <div class="row">
+          <input type="text" id="df-bucket" placeholder="bucket-name" />
+          <input type="text" id="df-folder" placeholder="folder-name" />
+          <button class="btn btn-danger" onclick="deleteFolder()">Delete Folder + Contents</button>
+        </div>
+        <div id="df-output" class="output">–</div>
+      </div>
+    </div>
+
+    <!-- ── Upload Panel ── -->
+    <div class="panel" id="panel-upload">
+      <p class="panel-title">Upload File</p>
+      <p class="panel-sub">upload a file into a bucket or folder prefix</p>
+
+      <div class="card">
+        <div class="card-title">Select & Upload</div>
+        <div class="row">
+          <input type="text" id="upload-bucket" placeholder="bucket-name (must exist)" oninput="sanitizeBucketInput(this)" />
+          <input type="text" id="upload-prefix" placeholder="folder/prefix (optional)" />
+        </div>
+        <div class="row">
+          <input type="file" id="upload-file" />
+          <button class="btn btn-primary" onclick="uploadFile()">⬆ Upload</button>
+        </div>
+        <div class="hint">⚠ The bucket must already exist. Create it first under <b>Buckets</b>.</div>
+        <div id="upload-output" class="output">–</div>
+      </div>
+    </div>
+
+    <!-- ── Delete File Panel ── -->
+    <div class="panel" id="panel-delete">
+      <p class="panel-title">Delete File</p>
+      <p class="panel-sub">permanently remove a specific file by its key</p>
+
+      <div class="card">
+        <div class="card-title">Remove File</div>
+        <div class="row">
+          <input type="text" id="dfile-bucket" placeholder="bucket-name" />
+          <input type="text" id="dfile-key" placeholder="full/path/to/file.ext" />
+          <button class="btn btn-danger" onclick="deleteFile()">Delete</button>
+        </div>
+        <div id="dfile-output" class="output">–</div>
+      </div>
+    </div>
+
+    <!-- ── Copy/Move Panel ── -->
+    <div class="panel" id="panel-copymove">
+      <p class="panel-title">Copy / Move File</p>
+      <p class="panel-sub">duplicate or relocate files within S3</p>
+
+      <div class="card">
+        <div class="card-title">Source</div>
+        <div class="row">
+          <input type="text" id="cm-bucket" placeholder="source bucket" />
+          <input type="text" id="cm-src" placeholder="source/file/key.ext" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Destination</div>
+        <div class="row">
+          <input type="text" id="cm-destbucket" placeholder="dest bucket (leave blank = same)" />
+          <input type="text" id="cm-dest" placeholder="destination/file/key.ext" />
+        </div>
+        <div class="row">
+          <button class="btn btn-blue" onclick="copyFile()">📋 Copy</button>
+          <button class="btn btn-primary" onclick="moveFile()">✂ Move</button>
+        </div>
+        <div id="cm-output" class="output">–</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  /* ── Navigation ── */
+  const PANEL_LABELS = {
+    buckets: 'Buckets', browse: 'Browse Contents', folders: 'Folder Operations',
+    upload: 'Upload File', delete: 'Delete File', copymove: 'Copy / Move'
+  };
+
+  function switchPanel(id, btn) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.getElementById('panel-' + id).classList.add('active');
+    btn.classList.add('active');
+    document.getElementById('panel-label').textContent = PANEL_LABELS[id];
+  }
+
+  /* ── Toast ── */
+  let toastTimer;
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+    t.className = 'toast show ' + type;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  /* ── Validation ── */
+  function sanitizeBucketInput(el) {
+    el.value = el.value.toLowerCase().replace(/[^a-z0-9\-]/g, '');
+  }
+
+  function validateBucket(val, errId) {
+    const err = document.getElementById(errId);
+    if (!val) { showError(errId, 'Bucket name is required.'); return false; }
+    if (/[A-Z\s]/.test(val)) { showError(errId, 'Bucket names must be lowercase with no spaces.'); return false; }
+    if (err) err.classList.remove('show');
+    return true;
+  }
+
+  function showError(errId, msg) {
+    const el = document.getElementById(errId);
+    if (el) { el.textContent = msg; el.classList.add('show'); }
+    showToast(msg, 'error');
+  }
+
+  /* ── API helper ── */
+  async function api(path, opts = {}) {
+    const r = await fetch(path, opts);
+    return r.json();
+  }
+
+  function setOutput(id, data) {
+    const el = document.getElementById(id);
+    const isErr = data.error;
+    el.className = 'output ' + (isErr ? 'error-state' : 'success');
+    el.textContent = JSON.stringify(data, null, 2);
+    if (isErr) showToast(data.error, 'error');
+    else showToast('Done!', 'success');
+  }
+
+  /* ── Buckets ── */
+  async function listBuckets() {
+    const d = await api('/api/buckets');
+    const el = document.getElementById('buckets-output');
+    if (d.error) { setOutput('buckets-output', d); return; }
+
+    const buckets = d.buckets || [];
+    if (buckets.length === 0) {
+      el.className = 'output';
+      el.textContent = 'No buckets found. Create one above.';
+      return;
+    }
+
+    el.className = 'output success';
+    el.innerHTML = '';
+
+    const grid = document.createElement('div');
+    grid.className = 'bucket-grid';
+    buckets.forEach(b => {
+      const chip = document.createElement('div');
+      chip.className = 'bucket-chip';
+      chip.innerHTML = `<span class="bucket-icon">🪣</span>${b}`;
+      chip.onclick = () => {
+        document.getElementById('browse-bucket').value = b;
+        switchPanel('browse', document.querySelectorAll('.nav-item')[1]);
+        listContents();
+      };
+      grid.appendChild(chip);
+    });
+    el.appendChild(grid);
+    showToast(`${buckets.length} bucket(s) found`, 'success');
+  }
+
+  async function createBucket() {
+    const name = document.getElementById('new-bucket').value.trim();
+    if (!name) { showToast('Enter a bucket name', 'error'); return; }
+    const d = await api(`/api/buckets/${name}`, { method: 'POST' });
+    setOutput('buckets-output', d);
+    if (!d.error) { document.getElementById('new-bucket').value = ''; listBuckets(); }
+  }
+
+  async function deleteBucket() {
+    const name = document.getElementById('del-bucket').value.trim();
+    if (!name) { showToast('Enter a bucket name', 'error'); return; }
+    const d = await api(`/api/buckets/${name}`, { method: 'DELETE' });
+    setOutput('buckets-output', d);
+    if (!d.error) { document.getElementById('del-bucket').value = ''; listBuckets(); }
+  }
+
+  /* ── Browse ── */
+  async function listContents() {
+    const bucket = document.getElementById('browse-bucket').value.trim();
+    const prefix = document.getElementById('browse-prefix').value.trim();
+    if (!bucket) { showToast('Enter a bucket name', 'error'); return; }
+
+    const d = await api(`/api/buckets/${bucket}/contents?prefix=${prefix}`);
+    const el = document.getElementById('browse-output');
+
+    if (d.error) { setOutput('browse-output', d); return; }
+
+    const folders = d.folders || [];
+    const files = d.files || [];
+
+    if (folders.length === 0 && files.length === 0) {
+      el.className = 'output';
+      el.innerHTML = '<div class="empty-state">🗂 This location is empty.</div>';
+      return;
+    }
+
+    el.className = 'output';
+    el.innerHTML = `
+      <table class="file-table">
+        <thead><tr>
+          <th>Type</th><th>Name / Key</th><th>Size</th><th>Last Modified</th>
+        </tr></thead>
+        <tbody>
+          ${folders.map(f => `<tr>
+            <td><span class="badge badge-folder">Folder</span></td>
+            <td>${f}</td><td>–</td><td>–</td>
+          </tr>`).join('')}
+          ${files.map(f => `<tr>
+            <td><span class="badge badge-file">File</span></td>
+            <td>${f.key}</td>
+            <td>${formatSize(f.size)}</td>
+            <td>${f.last_modified.substring(0, 19).replace('T', ' ')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    showToast(`${folders.length} folder(s), ${files.length} file(s)`, 'success');
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  /* ── Folders ── */
+  async function createFolder() {
+    const bucket = document.getElementById('cf-bucket').value.trim();
+    const folder = document.getElementById('cf-folder').value.trim();
+    if (!bucket || !folder) { showToast('Fill in both fields', 'error'); return; }
+    const d = await api(`/api/buckets/${bucket}/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder_name: folder })
+    });
+    setOutput('cf-output', d);
+  }
+
+  async function deleteFolder() {
+    const bucket = document.getElementById('df-bucket').value.trim();
+    const folder = document.getElementById('df-folder').value.trim();
+    if (!bucket || !folder) { showToast('Fill in both fields', 'error'); return; }
+    const d = await api(`/api/buckets/${bucket}/folders`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder_name: folder })
+    });
+    setOutput('df-output', d);
+  }
+
+  /* ── Upload ── */
+  async function uploadFile() {
+    const bucket = document.getElementById('upload-bucket').value.trim();
+    const prefix = document.getElementById('upload-prefix').value.trim();
+    const file = document.getElementById('upload-file').files[0];
+
+    if (!bucket) { showToast('Enter a bucket name', 'error'); return; }
+    if (!file) { showToast('Select a file to upload', 'error'); return; }
+    if (/[A-Z]/.test(bucket)) {
+      showToast('Bucket name must be lowercase', 'error'); return;
+    }
+
+    const form = new FormData();
+    form.append('file', file);
+    form.append('prefix', prefix);
+    const d = await fetch(`/api/buckets/${bucket}/upload`, { method: 'POST', body: form })
+                    .then(r => r.json());
+    setOutput('upload-output', d);
+  }
+
+  /* ── Delete File ── */
+  async function deleteFile() {
+    const bucket = document.getElementById('dfile-bucket').value.trim();
+    const key = document.getElementById('dfile-key').value.trim();
+    if (!bucket || !key) { showToast('Fill in both fields', 'error'); return; }
+    const d = await api(`/api/buckets/${bucket}/files`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
+    });
+    setOutput('dfile-output', d);
+  }
+
+  /* ── Copy / Move ── */
+  async function copyFile() {
+    const bucket = document.getElementById('cm-bucket').value.trim();
+    const src = document.getElementById('cm-src').value.trim();
+    const dest = document.getElementById('cm-dest').value.trim();
+    const destBucket = document.getElementById('cm-destbucket').value.trim();
+    if (!bucket || !src || !dest) { showToast('Fill in source bucket, source key, and dest key', 'error'); return; }
+    const d = await api(`/api/buckets/${bucket}/copy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_key: src, dest_key: dest, dest_bucket: destBucket || bucket })
+    });
+    setOutput('cm-output', d);
+  }
+
+  async function moveFile() {
+    const bucket = document.getElementById('cm-bucket').value.trim();
+    const src = document.getElementById('cm-src').value.trim();
+    const dest = document.getElementById('cm-dest').value.trim();
+    const destBucket = document.getElementById('cm-destbucket').value.trim();
+    if (!bucket || !src || !dest) { showToast('Fill in source bucket, source key, and dest key', 'error'); return; }
+    const d = await api(`/api/buckets/${bucket}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_key: src, dest_key: dest, dest_bucket: destBucket || bucket })
+    });
+    setOutput('cm-output', d);
+  }
+
+  /* ── Init ── */
+  listBuckets();
+</script>
+</body>
+</html>
